@@ -1,8 +1,0 @@
-; $Id$
-
-name = Job Administration Menu
-description = Module that adds support for Administration of Job Postings
-package = ACM SIGMOD Job & Resume Database
-version = alpha
-core = 7.x
-files[] = jobadmin.module
