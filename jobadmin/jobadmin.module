@@ -1,0 +1,1108 @@
+<?php
+/**
+ * @file
+ * This module generates the Admin section viewable by only the Admin
+ */
+
+/**
+ * This functions implements hook_mail
+ * @param unknown_type $key
+ * @param unknown_type $message
+ * @param unknown_type $params
+ */
+function jobadmin_mail($key, &$message, $params){
+
+	$message['subject'] = $params['subject'];
+	$message['body'][] = $params['body'];
+}
+
+/**
+ * Implements hook_permission().
+ */
+function jobadmin_permission() {
+	return array(
+    'administer acmsigmod' => array(
+      'title' => t('Administer ACM SIGMOD'),
+	),
+	);
+}
+
+/**
+ * This function implements the Drupal alter hook
+ */
+function jobadmin_form_alter(&$form, &$form_state, $form_id) {
+	switch($form_id){
+		case 'user_filter_form':
+			$form['filters']['usersearch'] = array(
+    '#type' => 'textfield',
+    '#title' => t('User Search'),
+    '#autocomplete_path' => 'user/autocomplete',
+    '#size' => 25,
+    '#default_value' => '',
+    '#attributes' => array('title' => t('Enter the terms you wish to search for.')),
+			);
+			break;
+
+	}
+
+}
+/**
+ * Implements the hook_menu()
+ */
+function jobadmin_menu(){
+
+	$items['administration'] = array(
+      'title' => 'Admin',
+      'access arguments' => array('administer acmsigmod'),
+      'page callback' => '_job_approval_list',
+      'type' => MENU_NORMAL_ITEM,
+	  'menu_name'		   => 'main-menu',
+      'weight' => -5,
+      'file' => 'jobadmin.jobapproval.inc',
+	);
+	/*$items['users'] = array(
+	 'title' => 'Users',
+	 'access arguments' => array('administer acmsigmod'),
+	 'page callback' => 'jobadmin_list_output',
+	 'type' => MENU_NORMAL_ITEM,
+	 'menu_name'		   => 'main-menu',
+	 'weight' => -5,
+	 'file' => 'jobadmin_listuser.inc',
+	 );  */
+
+	$items['administration/homeAdmin'] = array(
+     'title' => 'Admin Home',
+     'access arguments' => array('administer acmsigmod'),
+     'page callback' => '_job_approval_list',
+   	 'type' => MENU_DEFAULT_LOCAL_TASK,
+     'weight' => 0,
+     'file' => 'jobadmin.jobapproval.inc',
+	);
+	 
+	$items['administration/listUsers'] = array(
+     'title' => 'List Users',
+     'access arguments' => array('administer acmsigmod'),
+	//'page callback' => '_user_list',
+     'page callback' => 'jobadmin_list',
+     'access arguments' => array('administer users'),
+     'type' => MENU_LOCAL_TASK,
+     'weight' => 1,
+     'file' =>'jobadmin_userlist.inc'
+     );
+      
+      
+     $items['administration/broadcastEmail'] = array(
+     'title' => 'Broadcast E-mail',
+     'access arguments' => array('administer acmsigmod'),
+     'page callback' => '_broadcast_page',
+     'type' => MENU_LOCAL_TASK,
+     'weight' => 2,
+     );
+      
+     $items['administration/sitePreferences'] = array(
+     'title' => 'Preferences',
+     'access arguments' => array('administer acmsigmod'),
+     'page callback' => '_preference_page',
+     'type' => MENU_LOCAL_TASK,
+     'weight' => 3,
+     );
+      
+     $items['administration/homeAdmin/jobApproval'] = array(
+      
+     'title' => 'Pending Approval Job Posts',
+     'access arguments' => array('administer acmsigmod'),
+     'type' => MENU_DEFAULT_LOCAL_TASK,
+   	 'weight' => 0,
+
+     );
+      
+     $items['administration/homeAdmin/adminStats'] = array(
+      
+     'title' => 'Statistics',
+     'access arguments' => array('administer acmsigmod'),
+     'page callback' => '_admin_stats',
+     'type' => MENU_LOCAL_TASK,
+     'weight' => 1,
+     );
+      
+     $items['administration/homeAdmin/banDomain'] = array(
+      
+     'title' => 'Banned Domains',
+     'access arguments' => array('administer acmsigmod'),
+     'page callback' => '_admin_banDomain',
+     'type' => MENU_LOCAL_TASK,
+     'weight' => 2,
+     );
+      
+     $items['administration/homeAdmin/preapprove'] = array(
+      
+     'title' => 'Pre-Approved Job Posters',
+     'access arguments' => array('administer acmsigmod'),
+     'page callback' => 'jobadmin_preapproved',
+     'type' => MENU_LOCAL_TASK,
+     'weight' => 2,
+     'file' => 'jobadmin.jobapproval.inc'
+     );
+      
+     $items['contactUs'] = array(
+   'title' => 'Contact Us',
+   'access callback' => '_jobadmin_showContactUs',
+   'page callback' => '_admin_contactUs',
+   'type' => MENU_NORMAL_ITEM,
+   'menu_name' => 'main-menu',
+   'weight' => 10,   
+     );
+      
+     $items['loginlink'] = array(
+   'title' => 'Login / Register',
+   'access callback' => '_jobadmin_isNotLoggedin',
+   'page callback' => '_jobadmin_login',
+   'type' => MENU_NORMAL_ITEM,
+   'menu_name' => 'main-menu',
+   'weight' => 0,   
+     );
+      
+     return $items;
+}
+
+/**
+ * 
+ * This is a helper function which helps in the display of the Contact Us page
+ */
+function _jobadmin_showContactUs() {
+	global $user;
+
+	return user_access('access content', $user) &&  // 0 if not logged in
+			!(// Also hide tab in these cases:
+				user_access('administer acmsigmod', $user) ||
+				1==$user->uid
+			);
+}
+
+
+/**
+ * 
+ * Helper function to check if JobAdmin role is not logged in
+ */
+function _jobadmin_isNotLoggedin() {
+	global $user;
+	return 0==$user->uid; // 0 if not logged in
+}
+
+
+/**
+ * 
+ * Helper function to check if JobAdmin role is logged in
+ */
+function _jobadmin_login() {
+	drupal_goto('user');
+}
+
+
+/**
+ * Implementation of theme hook for jobadmin
+ */
+function jobadmin_theme() {
+	return array(
+    'admin_joblist_form' => array(
+    	'render element' => 'form', 
+    	'file' => 'jobadmin.jobapproval.inc',
+	),
+
+    'bannedDomain_table_form' => array(
+    	'render element' => 'form', 
+	),
+	);
+}
+
+/**
+ *
+ * This is a helper function that generates the admin overview page
+ */
+function _admin_overview(){
+	$output = t('Admin home section, job approval list by default');
+	return $output;
+}
+
+/**
+ *
+ * This is a helper function that generates the user list page
+ */
+function _user_list(){
+	$build['_admin_search_form'] = drupal_get_form('_admin_search_form');
+	return  $build;
+}
+
+/**
+ *
+ * This function sets up the form for Admin User Search ***NOT BEING USED - For future implementation of Admin Search***
+ */
+function _admin_search_form() {
+
+	//This sets up all the columns of the list
+	$header = array(
+    'username' => array('data' => t('Username'), 'field' => 'u.name'),
+	'email' => array('data' => t('E-mail'), 'field' => 'u.mail'),
+    'status' => array('data' => t('Status'), 'field' => 'u.status'),
+    'roles' => array('data' => t('Roles')),
+    'member_for' => array('data' => t('Member for'), 'field' => 'u.created', 'sort' => 'desc'),
+    'access' => array('data' => t('Last access'), 'field' => 'u.access'),
+    'operations' => array('data' => t('Operations')),
+	'disabled' => array('data' => t('Disabled')),  
+	'active' => array('data' => t('Active')), 
+	'preapproved' => array('data' => t('Pre-Approved')), 
+	);
+
+	//This sets up the query. looks at table 'users' and sets the alias 'u' to it. Returns $SelectQuery type
+	$query = db_select('users', 'u');
+
+	//I am not sure what this one does yet. Empty API O_O
+	$query->condition('u.uid', 0, '<>');
+
+
+	//"Extends a query object for user administration filters based on session."
+	user_build_filter_query($query);
+
+	//Makes copy of the SelectQuery $query
+	$count_query = clone $query;
+
+	//Adds an aditional expression to the SQL query
+	$count_query->addExpression('COUNT(u.uid)');
+
+	//I'm also not sure about what 'extend' does, empty API on it..
+	$query = $query->extend('PagerDefault')->extend('TableSort');
+
+
+	$query
+	->fields('u', array('uid', 'name', 'status', 'created', 'access'))
+	->limit(50)
+	->orderByHeader($header)
+	->setCountQuery($count_query);
+
+	//This finally executes the query and saves the results
+	$result = $query->execute();
+
+	//Manage Admin Block -------------------------START-------------------
+	$form['Manage Admin'] = array(
+   '#type' => 'link', 
+  '#title' => t('Manage Administrators'), 
+  '#href' => "user/$account->uid/edit", 
+  '#options' => array('query' => $destination),
+	);
+	//Manage Admin Block -------------------------END---------------------
+
+
+	//Search Filters Block -------------------------------START-------------
+	$form['Search Filters'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Search Filters'),
+    '#attributes' => array('class' => array('container-inline')),
+	);
+
+	$form['Search Filters']['administratorFilter'] = array(
+   '#type' => 'link', 
+  '#title' => t('All'), 
+  '#href' => "user/$account->uid/edit", 
+  '#options' => array('query' => $destination),
+  '#suffix' => t(' | ')
+	);
+
+	$form['Search Filters']['jobposterFilter'] = array(
+   '#type' => 'link', 
+  '#title' => t('JobPoster'), 
+  '#href' => "user/$account->uid/edit", 
+  '#options' => array('query' => $destination),
+  '#suffix' => t(' | ')
+	);
+
+	$form['Search Filters']['jobseekerFilter'] = array(
+   '#type' => 'link', 
+  '#title' => t('JobSeeker'), 
+  '#href' => "user/$account->uid/edit", 
+  '#options' => array('query' => $destination),
+  '#suffix' => t(' | ')
+	);
+	//Search Filter Block -------------------------END--------------------
+
+	//Search Row Block ---------------------------START---------------------
+	$form['search'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Search and search options'),
+    '#attributes' => array('class' => array('container-inline')),
+	);
+
+
+	$form['search']['searchBox'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Search Box'),
+    '#autocomplete_path' => 'user/autocomplete'
+    );
+
+    $form['search']['select'] = array(
+    '#type' => 'select',
+    '#options' => array('userID' => t('UserID'), 'email' => t('E-mail')),
+    );
+
+
+    $form['search']['submitButton'] = array(
+    '#type' => 'submit',
+    '#value' => t('Search'),
+    );
+
+    //Search Row Block -------------------------------END-----------------------
+
+    $destination = drupal_get_destination();
+
+    $status = array(t('blocked'), t('active'));
+    $roles = array_map('check_plain', user_roles(TRUE));
+    $accounts = array();
+    foreach ($result as $account) {
+    	$users_roles = array();
+    	$roles_result = db_query('SELECT rid FROM {users_roles} WHERE uid = :uid', array(':uid' => $account->uid));
+    	foreach ($roles_result as $user_role) {
+      $users_roles[] = $roles[$user_role->rid];
+    	}
+    	asort($users_roles);
+
+    	$options[$account->uid] = array(
+      'username' => theme('username', array('account' => $account)),
+    	//'email' => theme('mail', array('account' => $account->mail)),
+      'status' =>  $status[$account->status],
+      'roles' => theme('item_list', array('items' => $users_roles)),
+      'member_for' => format_interval(REQUEST_TIME - $account->created),
+      'access' =>  $account->access ? t('@time ago', array('@time' => format_interval(REQUEST_TIME - $account->access))) : t('never'),
+      'operations' => array('data' => array('#type' => 'link', '#title' => t('edit'), '#href' => "user/$account->uid/edit", '#options' => array('query' => $destination))),
+      'disabled' => array('data' => array('#type' => 'checkbox')),
+      'active' => array('data' => array('#type' => 'checkbox')),
+      'preapproved' => array('data' => array('#type' => 'checkbox')),
+    	);
+    }
+
+    $form['list']['accounts'] = array(
+    '#type' => 'tableselect',
+    '#header' => $header,
+    '#options' => $options,
+    '#empty' => t('No people available.'),
+    );
+
+    $form['pager'] = array('#markup' => theme('pager'));
+
+    return $form;
+}
+
+/**
+ * 
+ * Sets up the Contact Us page
+ */
+function _admin_contactUs(){
+	$contactUsEMailAddress = variable_get('site_mail');
+	$output = t('If you have any problems using the site or require assistance with any aspect ');
+	$output .= t('of the site, please contact the website administrator at the following ');
+	$output .= t('E-Mail address: <br/><br/>');
+
+	$link = '<a href=mailto:';
+	$link .= $contactUsEMailAddress;
+	$link .= '>';
+	$link .= $contactUsEMailAddress;
+	$link .= '</a>';
+	$output .= $link;
+
+	return $output;
+}
+
+/**
+ * This is a helper function that generates the user admin statistics page
+ */
+function _admin_stats(){
+
+	$stats = '';
+
+	//Determine Number of Logged in
+	$count_query = db_query('SELECT COUNT(*) FROM {sessions} WHERE uid != 0');
+	$numOnline = $count_query->fetchField();
+	$stats = '<h3> USERS STATISTICS </h3>';
+	$stats .= '<h6>'.t('Number of Online Users: '). $numOnline. '</h6>';
+
+	// Determine number of Registered Job Posters
+	$jobposternum  = '';
+	$maxval = '';
+
+	for ($i = 6; $i>=0; $i--)
+	{
+		$daybefore = $i*30;
+		//$date = date('Y-m-d',strtotime('-'.$daybefore.' day'));
+		//echo $date;
+		$unixtime = REQUEST_TIME - $i*2629743;
+
+		$result = db_query("SELECT COUNT(*) FROM {users} u, {users_roles} r WHERE u.uid != 0 AND u.uid=r.uid AND r.rid = 5 AND u.created <=:now", array (':now' => $unixtime,));
+		//echo $result->fetchField();
+		if($i>0)
+		$jobposternum .= strval($result->fetchField()). ",";
+		if($i==0){
+			$num = $result->fetchField();
+			$jobposternum .= strval($num);
+			$maxval = strval($num+10);
+		}
+	}
+	$max = $maxval;
+	//$stats .='<img src="http://chart.apis.google.com/chart?chxl=1:|6+months+ago|5+months+ago|4+months+ago|3+months+ago|2+months+ago|1+month+ago|Today&chxr=0,0,'.$maxval.'.5&chxs=1,676767,8.5,0,l,676767&chxt=y,x&chbh=a&chs=460x225&cht=bvg&chco=779A51&chd=t:'.$jobposternum.'&chtt=Number+of+Registered+Job+Posters&chts=676767,13.5" width="460" height="225" alt="Number of Registered Job Posters" /><br></br>';
+	$stats .='<img src="http://chart.apis.google.com/chart?chxl=1:|6+months+ago|5+months+ago|4+months+ago|3+months+ago|2+months+ago|1+month+ago|Today&&chxr=0,0,'.$max.'|1,0,6&chxs=1,676767,9,0,lt,676767&chxt=y,x&chbh=a&chs=460x225&cht=bvg&chco=3366CC&chd=t:'.$jobposternum.'&chds=0,'.$max.'&chtt=Number+of+Registered+Job+Posters" width="460" height="225" alt="Number of Registered Job Posters over the last 6 months" /><br></br>';
+
+	// Determine number of Registered Job Seeker
+	$jobposternum  = '';
+	$maxval = '';
+
+	for ($i = 6; $i>=0; $i--)
+	{
+		$daybefore = $i*30;
+		//$date = date('Y-m-d',strtotime('-'.$daybefore.' day'));
+		//echo $date;
+		$unixtime = REQUEST_TIME - $i*2629743;
+
+		$result = db_query("SELECT COUNT(*) FROM {users} u, {users_roles} r WHERE u.uid != 0 AND u.uid=r.uid AND r.rid = 6 AND u.created <=:now", array (':now' => $unixtime,));
+		//echo $result->fetchField();
+		if($i>0)
+		$jobposternum .= strval($result->fetchField()). ",";
+		if($i==0){
+			$num = $result->fetchField();
+			$jobposternum .= strval($num);
+			$maxval = strval($num+10);
+		}
+	}
+	$max = $maxval;
+	//$stats .='<img src="http://chart.apis.google.com/chart?chxl=1:|6+months+ago|5+months+ago|4+months+ago|3+months+ago|2+months+ago|1+month+ago|Today&chxr=0,0,'.$maxval.'.5&chxs=1,676767,8.5,0,l,676767&chxt=y,x&chbh=a&chs=460x225&cht=bvg&chco=779A51&chd=t:'.$jobposternum.'&chtt=Number+of+Registered+Job+Seekers&chts=676767,13.5" width="460" height="225" alt="Number of Registered Job Seekers" /><br></br>';
+	$stats .='<img src="http://chart.apis.google.com/chart?chxl=1:|6+months+ago|5+months+ago|4+months+ago|3+months+ago|2+months+ago|1+month+ago|Today&&chxr=0,0,'.$max.'|1,0,6&chxs=1,676767,9,0,lt,676767&chxt=y,x&chbh=a&chs=460x225&cht=bvg&chco=3366CC&chd=t:'.$jobposternum.'&chds=0,'.$max.'&chtt=Number+of+Registered+Job+Seekers" width="460" height="225" alt="Number of Registered Job Seekers over the last 6 months" /><br></br>';
+	$stats .= '<h3> JOB POSTINGS STATISTICS </h3>';
+
+	// Number of current Approved and non-approved job postings
+	$unixtime = REQUEST_TIME;
+	$count_query = db_query('SELECT COUNT(*) FROM {node} n, {jobposting} j WHERE j.nid=n.nid AND expiredate >:now AND n.type = :posting AND status = 1',array(":now" => $unixtime, ':posting'=> 'jobposting',));
+	$numOnline = $count_query->fetchField();
+
+	$stats .= '<h6>'.t('Current Number of Approved Active Job Postings : '). $numOnline. '</h6>';
+
+	$count_query = db_query('SELECT COUNT(*) FROM {node} WHERE type = :posting AND status = 0', array(':posting'=> 'jobposting'));
+	$numOnline = $count_query->fetchField();
+	$stats .= '<h6>'.t('Current Number of Pending Approval Job Posting : '). $numOnline. '</h6>';
+    
+    $query = db_select('jobposting', 'j');
+    $query->fields('j', array('nid'));
+    $query->condition('j.expiredate', $unixtime, '<' );
+    $count_query = $query->countQuery()->execute()->fetchField();
+    $stats .= '<h6>'.t('Current Number of Expired Job Postings : '). $count_query. '</h6>';
+    
+
+	// Determine number of Active Job Postings Over time
+	$jobpostingnum  = '';
+	$maxval = 0;
+
+	for ($i = 6; $i>=0; $i--)
+	{
+		//$daybefore = $i*30;
+		$unixtime = REQUEST_TIME - $i*2629743;
+		$count_query = db_query('SELECT COUNT(*) FROM {node} n, {jobposting} j WHERE j.nid=n.nid AND expiredate < :now AND n.type = :posting AND n.created<=:timestamp',array(":now" => $unixtime, ':posting'=> 'jobposting',':timestamp' => $unixtime,));
+		//echo $->fetchField();
+		$num = $count_query->fetchField();
+		echo $num; 
+		if($num>$maxval){
+			$maxval = $num;
+		}
+		if($i>0)
+		$jobpostingnum .= strval($num). ",";
+		if($i==0){
+			$jobpostingnum .= strval($num);
+		}
+		 
+	}
+	$maxval += 10;
+	$max = strval($maxval);
+	//$stats .='<img src="http://chart.apis.google.com/chart?chxl=1:|6+months+ago|5+months+ago|4+months+ago|3+months+ago|2+months+ago|1+month+ago|Today&chxr=0,0,'.$max.'.5&chxs=1,676767,8.5,0,l,676767&chxt=y,x&chbh=a&chs=460x225&cht=bvg&chco=779A51&chd=t:'.$jobpostingnum.'&chtt=Number+of+Active+Job+Postings&chts=676767,13.5" width="460" height="225" alt="Number of Active Job Postings over 6 months" /><br></br>';
+	$stats .='<img src="http://chart.apis.google.com/chart?chxl=1:|6+months+ago|5+months+ago|4+months+ago|3+months+ago|2+months+ago|1+month+ago|Today&&chxr=0,0,'.$max.'|1,0,6&chxs=1,676767,9,0,lt,676767&chxt=y,x&chbh=a&chs=460x225&cht=bvg&chco=3366CC&chd=t:'.$jobpostingnum.'&chds=0,'.$max.'&chtt=Number+of+Active+Job+Postings" width="460" height="225" alt="Number of Active Job Postings over the last 6 months" /><br></br>';
+
+	// Determine number of Expired Job Postings Over time
+	$jobpostingnum  = '';
+	$maxval = 0;
+
+	for ($i = 6; $i>=0; $i--)
+	{
+		$daybefore = $i*30;
+		$unixtime = REQUEST_TIME - $i*2629743;
+		$count_query = db_query('SELECT COUNT(*) FROM {node} n, {jobposting} j WHERE j.nid=n.nid AND expiredate >:now AND n.type = :posting AND status = 0 AND j.expiredate<=:timestamp',array(":now" => $unixtime, ':posting'=> 'jobposting',':timestamp' => $unixtime,));
+		//echo $result->fetchField();
+		$num = $count_query->fetchField();
+		if($num>$maxval){
+			$maxval = $num;
+		}
+		if($i>0)
+		$jobpostingnum .= strval($num). ",";
+		if($i==0){
+			$jobpostingnum .= strval($num);
+		}
+	}
+	$maxval += 10;
+	$max = strval($maxval);
+
+	//Unsure why this is displaying differently than the others...
+	$stats .='<img src="http://chart.apis.google.com/chart?chxl=1:|6+months+ago|5+months+ago|4+months+ago|3+months+ago|2+months+ago|1+month+ago|Today&&chxr=0,0,'.$max.'|1,0,6&chxs=1,676767,9,0,lt,676767&chxt=y,x&chbh=a&chs=460x225&cht=bvg&chco=3366CC&chd=t:'.$jobpostingnum.'&chds=0,'.$max.'&chtt=Number+of+Expired+Job+Postings" width="460" height="225" alt="Number of Expired Job Postings over the last 6 months" /><br></br>';
+
+	return $stats;
+}
+
+
+/**
+ *
+ * Sets up the Banned Domain layout by using Form
+ */
+function _admin_banDomain_form(){
+
+	$form['insert'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Add New Banned Domain'),
+    '#attributes' => array('class' => array('container-inline')),
+    '#collapsible' => TRUE, 
+    '#collapsed' => TRUE
+	);
+
+	$form['insert']['domainName'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Domain Name'),
+    '#required' => TRUE,
+    '#size' => 20, 
+    ''
+    );
+
+    $form['insert']['reason'] = array(
+    '#type' => 'textfield',
+    '#size' => 30, 
+    '#title' => t('Reason (Optional)'),
+    );
+
+    $form['insert']['submitButton'] = array(
+    '#type' => 'submit',
+    '#value' => t('Add'),
+
+    //$form['insert']['#validate'] = '_admin_banDomain_validate'
+
+    );
+
+
+    /**
+     *
+     * Submit function which carries out the Ban Domain action
+     *
+     *
+     */
+    function _admin_banDomain_form_submit($form, &$form_state){
+
+    	$result = db_query("SELECT COUNT(*) FROM {banneddomains} " .
+			"WHERE BannedDomain = :entry ", array(':entry' => $form_state['values']['domainName']));
+    	if($result->fetchField() >0){
+    		drupal_set_message( t( $form_state['values']['domainName'].' domain name already exists'), 'error');
+    		return;
+    	}
+
+    	 
+
+    	db_insert('banneddomains')
+    	->fields(array(
+		'BannedDomain' =>$form_state['values']['domainName'],
+		'Reason' => $form_state['values']['reason']
+    	))
+    	->execute();
+
+    	drupal_set_message( $form_state['values']['domainName']." Banned Domain Add Successful.");
+
+
+    }
+
+
+
+
+
+    return $form;
+}
+
+/**
+ * This is a helper function that generates the user ban Domain page
+ */
+function _admin_banDomain(){
+
+	$output = "";
+	$output.= drupal_render(drupal_get_form('_admin_banDomain_form'));
+	$build['bannedDomain_table_form'] = drupal_get_form('bannedDomain_table_form');
+	$output.= drupal_render($build);
+
+	return $output;
+	/*return $output;
+	 $build['_admin_banDomain_form'] = drupal_get_form('_admin_banDomain_form');
+	 return  $build;*/
+}
+
+function bannedDomain_table_header(){
+	return array(
+    'banneddomain'   => array('data' => t('BannedDomain'), 'field' => 'b.BannedDomain', 'sort' =>'desc'),
+    'reason'   => array('data' => t('Reason'), 'field' => 'b.Reason'),
+	);
+}
+
+
+/**
+ *
+ *
+ * Sets up the banned domain page in table form
+ */
+function bannedDomain_table_form($form){
+
+	$header = bannedDomain_table_header();
+
+	$query = db_select('banneddomains', 'b');
+	$count_query = clone $query;
+	$count_query->addExpression('COUNT(b.BannedDomain)');
+	 
+	// $query->fields('b', array('BannedDomain', 'Reason'));
+
+	$query = $query->extend('PagerDefault')->extend('TableSort');
+	$query
+	->fields('b', array('BannedDomain', 'Reason'))
+	->limit(50)
+	->orderByHeader($header)
+	->setCountQuery($count_query);
+	$result = $query->execute();
+
+	 
+	$options = array();
+	foreach ($result as $entry){
+		 
+		$options[$entry->banneddomain] = array(
+    			'banneddomain' => $entry->banneddomain,
+    			'reason'  => $entry->reason,
+		);
+	}
+	 
+	$form['entries'] = array(
+    	    '#type' => 'tableselect',
+            '#header' => $header,
+            '#options' => $options,
+            '#empty' => t('No Domain Banned.'),
+	);
+	 
+	$form['actions'] = array('#type' => 'actions');
+	$form['actions']['submit'] = array('#type' => 'submit', '#value' =>t('Remove'));
+	$form['#submit'][] = 'bannedDomain_table_form_submit';
+
+	return $form;
+
+}
+
+/**
+ *
+ *
+ *
+ * Banned Domain table submit. Carries out action to Ban a Domain
+ */
+
+function bannedDomain_table_form_submit($form, &$form_state){
+
+	$domains = array_filter($form_state['values']['entries']);
+	foreach($domains as $deletedomain){
+		$domain_deleted = db_delete('banneddomains')
+		->condition('BannedDomain', $deletedomain)
+		->execute();
+		drupal_set_message($deletedomain." has been deleted from banned domain list!");
+
+	}
+
+}
+
+/*function theme_bannedDomain_table_form($form){
+ $form = $form['form'];
+
+ $rows = array();
+ if(isset($form['entries'])){
+ foreach (element_children($form['entries']) as $key) {
+ if (isset($form['entries'][$key])) {
+ $row = array();
+ $row[] = drupal_render($form['entries'][$key]['banneddomain']);
+ $row[] = drupal_render($form['entries'][$key]['reason']);
+ $row[] = array('data' => drupal_render($form['entries'][$key][0]));
+
+ $rows[] = $row;
+ }
+ }
+ }
+ $output = "";
+ $output .= theme('table', array('header' => bannedDomain_table_header(), 'rows' => $rows, 'empty' => "No banned Domain found."));
+ $output .= theme('pager');
+ $output .= drupal_render_children($form);
+ return $output;
+
+
+
+
+ }*/
+
+/**
+ * This is a helper function that generates the broadcast page
+ */
+function _broadcast_page(){
+	$build['_broadcast_page_form'] = drupal_get_form('_broadcast_page_form');
+	return  $build;
+}
+
+function _user_promotion_page() {
+	$build['_user_promotion_form'] = drupal_get_form('_user_promotion_form');
+
+	$header = array(
+	array('data' => t('UID'), 'field' => 'u.uid', 'sort' => 'desc'),
+	array('data' => t('Name'), 'field' => 'u.mail'),
+	);
+
+	$adminUIDs = db_query('SELECT uid FROM {users_roles} r WHERE r.rid = 3');
+
+	//Problem somewhere in this query
+	$query = db_select('users', 'u', array('target' => 'slave'))->extend('PagerDefault')->extend('TableSort');
+	$query
+	->fields('u', array('mail', 'uid'))
+	->condition('uid', $adminUIDs, 'IN')
+	->orderByHeader($header);
+	$adminAccounts = $query->execute();
+
+	//$adminAccounts = db_query('SELECT uid FROM {users} u WHERE u.uid = :uid', array(':uid' => $adminUIDs));
+	$rows = array();
+
+	foreach($adminAccounts as $account)
+	{
+		$rows[] = array(
+		$account->mail,
+		$account->uid
+		);
+	}
+
+	$build['admin_table'] = array(
+	    '#theme' => 'table',
+    	'#header' => $header,
+	    '#rows' => $rows,
+    	'#empty' => t('No admins available.'),
+	);
+
+	$output = drupal_render($build);
+	return $output;
+}
+
+/**
+ * This is a helper function that generates the preference page
+ */
+function _preference_page(){
+	$build['_preference_page_form'] = drupal_get_form('_preference_page_form');
+	return  $build;
+}
+
+
+/**
+ *
+ * This sets up the broadcast page form
+ */
+function _broadcast_page_form(){
+	 
+	$form['subject'] = array(
+	'#type' => 'textfield',
+	'#title' => t('Subject'),
+	'#size' => 60,
+	'#required' => TRUE,
+	'#default_value' => t(''),
+	);
+
+	$form['body'] = array(
+	'#type' => 'textarea',
+	'#title' => t('Message Body'),
+	'#cols' => 60,
+	'#required' => TRUE,
+	'#default_value' => t(''),
+	);
+
+	$form['recipients'] = array(
+	'#type' => 'radios',
+	'#title' => t('Send To:'),
+	'#required' => TRUE,
+	'#options' => array(
+      'ALL' => t('All Users'), 
+      'JOBSEEKERS' => t('Job Seekers'),
+      'JOBPOSTERS' => t('Job Posters'),
+	),
+	);
+
+	$form['submit'] = array(
+		'#type' => 'submit',
+		'#value' => t('Send'),
+	);
+
+	return $form;
+}
+
+/**
+ *
+ * This sets up the preference page form
+ */
+function _preference_page_form(){
+
+	$form['preApprovedUserFeature'] = array(
+	'#type' => 'checkbox', 
+	'#title' => t('Pre-approved Job Poster enabled'),
+    '#default_value' => variable_get('preApprovedJP'), 
+	);
+
+	/*
+	 $form['notifyAdmin_JP'] = array(
+	 '#type' => 'checkbox',
+	 '#title' => t('Notify admin of new job postings via E-Mail'),
+	 '#default_value' => variable_get('emailNotifyJP'),
+	 );
+
+	 $form['enabledAfterExpiration_JP'] = array(
+	 '#type' => 'checkbox',
+	 '#title' => t('Keep job post enabled after post expiration'),
+	 '#default_value' => variable_get('delAfterExpiration'),
+	 );
+	 */
+
+	$scrapeInterval = variable_get('DBscrapeInterval');
+	if (strcmp(substr($scrapeInterval, 0, 1), 'i') == 0)
+	{
+		$scrapeInterval = substr($scrapeInterval, 2);
+	}
+	$form['scrapeInterval'] = array(
+		'#type' => 'textfield', 
+  		'#title' => t('DB scrape interval'),
+	  	'#size' => 5,
+ 		'#field_suffix' => t('days'),
+	   	'#default_value' => $scrapeInterval,
+ 		'#rows' => 1,
+	 	'#maxlength' => 3,  
+		'#required' => TRUE,
+	);
+
+	$form['contactUsAddress'] = array(
+  	'#type' => 'textfield',
+  	'#title' => t('Contact Us E-Mail address'),
+  	'#default_value' => variable_get('site_mail'),
+	);
+
+	$form['googlemapsapi'] = array(
+	'#type' => 'textfield',
+	'#title' => t('Google Maps API Key'),
+	'#size' => 60,
+  	'#description' => 'Google Maps features disabled if empty. <a href="http://code.google.com/apis/maps/signup.html">Get API Key</a>.',
+	'#default_value' => variable_get("acm_googlemapsapikey", "")
+	);
+
+	$form['submit'] = array(
+  	'#type' => 'submit', 
+	'#value' => t('Save')
+	);
+
+	return $form;
+}
+
+
+
+/**
+ * This function is called once the submit button is pressed
+ * @param type $form
+ * @param type $form_state
+ */
+function _admin_search_form_submit($form, &$form_state) {
+	//db_query("INSERT INTO {table} (name, log, hidden) VALUES ('%s', %d, '%s')", $form_state['values']['name'], $form_state['values']['access']['log'],  $form_state['values']['hidden']);
+	drupal_set_message(t('Your form has been saved.'));
+
+	// db_query("SELECT * FROM {users} (name) LIKE  VALUES ('%s'), $form_state)
+}
+
+
+/**
+ * 
+ * 
+ * This function validates fields in the Preference page (hook_validate)
+ * 
+ */
+function _preference_page_form_validate($form, &$form_state) {
+	$values = $form_state['values'];
+	if( !is_numeric($values['scrapeInterval']) || intval($values['scrapeInterval']) < 0) {
+		form_set_error('scrapeInterval', t('The scrape interval must be an integer greater than or equal to zero.'));
+	}
+	if ($values['contactUsAddress'] && !valid_email_address($values['contactUsAddress'])) {
+		form_set_error('contactUsAddress', t('The e-mail address you specified is not valid.'));
+	}
+}
+
+
+/**
+ * This function submits fields in the Preference page (hook_submit)
+ * 
+ */
+function _preference_page_form_submit($form, &$form_state) {
+
+	$values = $form_state['values'];
+
+	variable_set('preApprovedJP', $values['preApprovedUserFeature']);
+	//variable_set('emailNotifyJP', $values['notifyAdmin_JP']);
+	//variable_set('delAfterExpiration', $values['enabledAfterExpiration_JP']);
+
+	variable_set('DBscrapeInterval', intval($values['scrapeInterval']));
+	variable_set('site_mail', $values['contactUsAddress']);
+
+	variable_set('acm_googlemapsapikey', $values['googlemapsapi']);
+
+	drupal_set_message(t('Preferences have been updated'));
+}
+
+/**
+ *
+ * This carries out the Broadcast page actions, that is send out an e-mail message to selected user class
+ * @param unknown_type $form
+ * @param unknown_type $form_state
+ */
+function _broadcast_page_form_submit($form, &$form_state) {
+
+	$values = $form_state['values'];
+	global $user;
+	$key = $values['recipients'];
+	$language = language_default();
+	$from = $user->mail;
+	$to = '';
+
+	$params = array();
+	$params['body'] = array();
+	$params['subject'] = $values['subject'];
+	$params['body'] = $values['body'];
+
+
+	$resultUR = db_query('SELECT ur.uid, ur.rid FROM {users_roles} ur');
+	$URarray = array();
+	foreach($resultUR as $UR){
+		$URarray[$UR->uid] = $UR->rid;
+	}
+
+	$resultAccounts = db_query('SELECT uid, mail FROM {users} u WHERE uid <> 0');
+
+	switch($key){
+		case 'ALL':
+			foreach($resultAccounts as $account){
+				$to .= $account->mail;
+				$to .= ', ';
+			}
+			break;
+
+		case 'JOBPOSTERS':
+			foreach($resultAccounts as $account){
+				if ($URarray[$account->uid] == 5){
+					$to .= $account->mail;
+					$to .= ', ';
+				}
+			}
+			break;
+
+		case 'JOBSEEKERS':
+			foreach($resultAccounts as $account){
+				if ($URarray[$account->uid] == 6){
+					$to .= $account->mail;
+					$to .= ', ';
+				}
+			}
+			break;
+	}
+
+	$message = drupal_mail('jobadmin', $key, $to, $language, $params, $from, TRUE);
+
+	 
+	if ($message['result']){
+		drupal_set_message(t('Message sent!'));
+	}
+	else {
+		drupal_set_message(t('Error: Message not sent!'));
+	}
+}
+
+/**
+ *
+ * Sets up the user promotion to admin form (Not being used)
+ */
+function _user_promotion_form() {
+
+	$form['user'] = array(
+    	'#type' => 'fieldset',
+	    '#title' => t('Administrative user promotion'),
+    	'#attributes' => array('class' => array('container-inline')),
+	);
+
+	$form['user']['mail'] = array(
+    	'#type' => 'textfield',
+	    '#title' => t('User\'s E-mail'),
+    	'#size' => 20, 
+	    '#default_value' => '',
+		'#autocomplete_path' => 'user/autocomplete',
+    	'#suffix' => t(' OR (I would like more whitespace here)')
+	);
+
+	$form['user']['uid'] = array(
+	    '#type' => 'textfield',
+    	'#size' => 5, 
+    	'#title' => t('User\'s UID'),
+		'#default_value' => '',
+	);
+
+	$form['user']['submit'] = array(
+	  	'#type' => 'submit', 
+		'#value' => t('Promote user')
+	);
+
+	return $form;
+}
+
+/**
+ *
+ * Carries out user promotion to admin action (Not being used)
+ * @param unknown_type $form
+ * @param unknown_type $form_state
+ */
+function _user_promotion_form_submit($form, &$form_state) {
+
+	$values = $form_state['values'];
+
+	if ($values['uid'] != '') {
+		$uidValue = (int)$values['uid'];
+		$numChanges = db_update('users_roles')
+		->fields(array(
+				'rid' => 3,
+		)
+		)
+		->condition('uid', $uidValue)
+		->execute();
+			
+		if ($numChanges == 0) {
+			drupal_set_message(t('User is already an administrator or does not exist within the database.'), 'warning');
+			return;
+		}
+		drupal_set_message(t('User has been promoted!'));
+		return;
+	}
+
+	if ($values['mail'] != '') {
+		$mail = $values['mail'];
+		$uidValue = db_query('SELECT uid FROM {users} u WHERE u.mail = :mail', array(':mail' => $mail))->fetchField();
+
+		$numChanges = db_update('users_roles')
+		->fields(array('rid' => 3))
+		->condition('uid', $uidValue)
+		->execute();
+
+		if ($numChanges == 0) {
+			drupal_set_message(t('User is already an administrator or does not exist within the database.'), 'warning');
+			return;
+		}
+		drupal_set_message(t('User has been promoted!'));
+		return;
+	}
+
+	drupal_set_message(t('No UID or E-Mail address was supplied.'), 'error');
+	return;
+}
